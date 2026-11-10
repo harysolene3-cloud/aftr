@@ -1,0 +1,14 @@
+{
+  "name": "aftr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AFTR — plateforme DJs, organisateurs et communauté (projet de démonstration, Master 2)",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "reset": "node --no-warnings server/reset.js",
+    "test": "node --no-warnings --test server/tests/"
+  }
+}
