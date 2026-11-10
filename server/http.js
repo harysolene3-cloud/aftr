@@ -1,6 +1,8 @@
 // Mini-routeur HTTP sans dépendance : routes JSON, cookies, sessions, contrôle des rôles.
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { get, run, all, now } from './db.js';
+import { randomBytes, scryptSync, timingSafeEqual, createHmac } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { get, run, all, now, DATA_DIR } from './db.js';
 
 export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -36,11 +38,30 @@ export function checkPassword(pw, stored) {
   const a = Buffer.from(hash, 'hex'), b = scryptSync(pw, salt, 32);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+// Sessions signées (HMAC) : le jeton porte l'identifiant et l'expiration, sans table à consulter.
+// Indispensable sur Vercel, où chaque instance a sa propre base temporaire.
+// Le secret vient de AFTR_SECRET, sinon d'un fichier généré une fois dans le dossier de données.
+function loadSecret() {
+  if (process.env.AFTR_SECRET) return process.env.AFTR_SECRET;
+  const file = join(DATA_DIR, '.secret');
+  try { return readFileSync(file, 'utf8'); } catch {}
+  const s = randomBytes(32).toString('hex');
+  mkdirSync(DATA_DIR, { recursive: true }); writeFileSync(file, s);
+  return s;
+}
+const SECRET = loadSecret();
+const sign = payload => createHmac('sha256', SECRET).update(payload).digest('base64url');
+
 export function createSession(userId) {
-  const token = randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
-  run('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)', token, userId, expires);
-  return token;
+  const payload = `${userId}.${Date.now() + 1000 * 60 * 60 * 24 * 14}`;
+  return payload + '.' + sign(payload);
+}
+function verifySession(token) {
+  const [id, exp, mac] = token.split('.');
+  if (!mac) return null;
+  const a = Buffer.from(mac), b = Buffer.from(sign(`${id}.${exp}`));
+  if (a.length !== b.length || !timingSafeEqual(a, b) || Number(exp) < Date.now()) return null;
+  return Number(id);
 }
 export function parseCookies(header = '') {
   return Object.fromEntries(header.split(';').map(c => c.trim().split('=')).filter(p => p[0]).map(([k, ...v]) => [k, decodeURIComponent(v.join('='))]));
@@ -48,9 +69,9 @@ export function parseCookies(header = '') {
 export function sessionUser(req) {
   const token = parseCookies(req.headers.cookie).aftr_session;
   if (!token) return null;
-  const s = get('SELECT user_id FROM sessions WHERE token = ? AND expires_at > ?', token, now());
-  if (!s) return null;
-  const u = get('SELECT id, email, name, avatar, city, theme, suspended FROM users WHERE id = ?', s.user_id);
+  const userId = verifySession(token);
+  if (!userId) return null;
+  const u = get('SELECT id, email, name, avatar, city, theme, suspended FROM users WHERE id = ?', userId);
   if (!u || u.suspended) return null;
   u.roles = all('SELECT role FROM user_roles WHERE user_id = ?', u.id).map(r => r.role);
   u.token = token;

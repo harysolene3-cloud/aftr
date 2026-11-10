@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const DATA_DIR = join(ROOT, 'data');
+// Sur Vercel, seul /tmp est inscriptible : la base y est recréée à chaque démarrage d'instance
+export const DATA_DIR = process.env.AFTR_DATA_DIR || (process.env.VERCEL ? '/tmp/aftr' : join(ROOT, 'data'));
 export const UPLOAD_DIR = join(DATA_DIR, 'uploads');
 const DB_FILE = join(DATA_DIR, 'aftr.db');
 

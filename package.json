@@ -4,7 +4,7 @@
   "private": true,
   "description": "AFTR — plateforme DJs, organisateurs et communauté (projet de démonstration, Master 2)",
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": { "node": "24.x" },
   "scripts": {
     "start": "node --no-warnings server/index.js",
     "dev": "node --no-warnings --watch server/index.js",
