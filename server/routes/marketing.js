@@ -220,14 +220,15 @@ const contentFields = body => [
   oneOf(body.network, Object.keys(NETWORK_RULES), 'Réseau'), str(body.topic, { max: 160 }), str(body.target, { max: 120 }), str(body.objective, { max: 120 }),
   str(body.tone, { max: 40 }), str(body.format, { max: 40 }), str(body.idea, { max: 500 }), str(body.hook, { max: 300 }), str(body.caption, { max: 3000 }),
   str(body.cta, { max: 300 }), str(body.hashtags, { max: 500 }), str(body.visual, { max: 500 }), date(body.scheduled_date), oneOf(body.status || 'draft', CAL_STATUSES, 'Statut'),
+  body.visual_url && /^\/uploads\/[a-f0-9]+\.png$/.test(body.visual_url) ? body.visual_url : null,
 ];
 route('GET', '/api/admin/contents', () => ({ items: all('SELECT * FROM marketing_contents ORDER BY COALESCE(scheduled_date, created_at) DESC') }), opt);
 route('POST', '/api/admin/contents', ({ body }) => ({
-  id: insert(`INSERT INTO marketing_contents (network, topic, target, objective, tone, format, idea, hook, caption, cta, hashtags, visual, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ...contentFields(body), now()),
+  id: insert(`INSERT INTO marketing_contents (network, topic, target, objective, tone, format, idea, hook, caption, cta, hashtags, visual, scheduled_date, status, visual_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, ...contentFields(body), now()),
 }), opt);
 route('PATCH', '/api/admin/contents/:id', ({ params, body }) => {
   const c = get('SELECT * FROM marketing_contents WHERE id = ?', params.id) || fail(404, 'Contenu introuvable.');
-  run(`UPDATE marketing_contents SET network = ?, topic = ?, target = ?, objective = ?, tone = ?, format = ?, idea = ?, hook = ?, caption = ?, cta = ?, hashtags = ?, visual = ?, scheduled_date = ?, status = ? WHERE id = ?`, ...contentFields({ ...c, ...body }), c.id);
+  run(`UPDATE marketing_contents SET network = ?, topic = ?, target = ?, objective = ?, tone = ?, format = ?, idea = ?, hook = ?, caption = ?, cta = ?, hashtags = ?, visual = ?, scheduled_date = ?, status = ?, visual_url = ? WHERE id = ?`, ...contentFields({ ...c, ...body }), c.id);
   return { ok: true };
 }, opt);
 route('DELETE', '/api/admin/contents/:id', ({ params }) => { run('DELETE FROM marketing_contents WHERE id = ?', params.id); return { ok: true }; }, opt);

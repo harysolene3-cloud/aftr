@@ -220,16 +220,18 @@ function mountClipper(v, rerender) {
       const name = `${(state.me.dj?.stage_name || 'clip').replace(/\W+/g, '-')}-${KIND[m.kind][0].replace(/\W+/g, '').toLowerCase()}-${fmt.tc(s).replace(':', 'm')}-${format.replace(':', 'x')}`;
       const out = URL.createObjectURL(blob);
       status.textContent = 'Enregistrement dans ton historique…';
-      const up = await api.upload(new File([blob], `${name}.${ext}`, { type: blob.type }));
+      // Le clip est déjà prêt sur l'appareil. Le stocker sur AFTR est un plus : la version en ligne (Vercel) refuse les fichiers de plus de 4,5 Mo.
+      let up = null, upErr = '';
+      try { up = await api.upload(new File([blob], `${name}.${ext}`, { type: blob.type })); } catch (err) { upErr = err.message; }
       const caps = captions(m.kind);
-      const { id: clipId } = await api.post('/api/studio/clips', { title: name, source_name: file.name, start_s: s, end_s: en, format, moment_kind: m.kind, file: up.url, mime: blob.type, size: blob.size, caption: caps[0].text });
+      const { id: clipId } = await api.post('/api/studio/clips', { title: name, source_name: file.name, start_s: s, end_s: en, format, moment_kind: m.kind, file: up?.url || null, mime: blob.type, size: blob.size, caption: caps[0].text });
       status.textContent = '';
       $('#result', v).innerHTML = html`<div class="grid g2" style="margin-top:6px">
         <div class="stack" style="--gap:10px"><video src="${out}" controls autoplay muted playsinline style="width:100%;max-height:480px;background:#000;border-radius:var(--r);object-fit:contain"></video>
           <div class="row"><a class="btn primary" href="${out}" download="${name}.${ext}">${icon('download')}Télécharger le ${ext.toUpperCase()}</a><span class="small muted">${fmt.bytes(blob.size)} · ${FORMATS[format].join('×')} · ${ext === 'mp4' ? 'MP4 (H.264)' : 'WebM : ton navigateur ne sait pas produire de MP4'}</span></div></div>
         <div class="stack" style="--gap:10px"><div class="row spread"><h3 style="font-size:16px">Idées de publication</h3><span class="tiny muted">Modèles de texte, sans IA</span></div>
           ${caps.map(c => html`<div class="panel stack" style="--gap:6px"><span class="eyebrow">${c.network}</span><p style="white-space:pre-wrap">${c.text}</p><p class="mono small" style="color:var(--accent-text)">${c.tags}</p><button class="btn sm" data-copy="${c.text}\n\n${c.tags}" style="justify-self:start">Copier</button></div>`)}
-          <p class="tiny muted">Clip enregistré dans ton historique ci-dessous.</p>
+          ${up ? html`<p class="tiny muted">Clip enregistré dans ton historique ci-dessous.</p>` : html`<p class="notice">${icon('info')}<span><b>Clip prêt, mais pas stocké sur AFTR.</b> ${upErr} Télécharge-le avec le bouton à gauche : il reste dans l'historique, sans fichier.</span></p>`}
           <button class="btn primary" data-plan style="justify-self:start">${icon('calendar')}Programmer ce clip dans Ma com'</button></div></div>`.s;
       $('[data-plan]', v).onclick = async ev => {
         const btn = ev.currentTarget;

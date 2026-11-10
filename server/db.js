@@ -471,6 +471,9 @@ export function openDb({ fresh = false } = {}) {
   db = new DatabaseSync(DB_FILE);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   if (isNew) db.exec(SCHEMA);
+  // Ajouts de colonnes sur une base existante
+  for (const [t, c] of [['studio_posts', 'visual_url'], ['marketing_contents', 'visual_url']])
+    if (!db.prepare(`PRAGMA table_info(${t})`).all().some(x => x.name === c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);
   return { db, isNew };
 }
 

@@ -1,6 +1,7 @@
 // « Ma com' » : stratégie marketing du DJ, suivi des publications et des abonnés.
 import { html, raw, api, state, icon, fmt, toast, modal, confirmBox, formData, empty, notice, $, on, act, select, chip, today, addDays } from '../core.js';
 import { navigate } from '../app.js';
+import { openVisualStudio, visualBlock, bindCopy, CLUB_PHOTOS } from '../visual.js';
 
 const NETWORKS = ['Instagram', 'TikTok', 'YouTube', 'Facebook'];
 const FORMATS = ['Reel', 'Vidéo courte', 'Carrousel', 'Photo', 'Story', 'Live'];
@@ -22,13 +23,29 @@ function postModal(p, { gigs = [], clips = [] }, done) {
     <label class="field"><span>Lien de la publication</span><input class="input" name="link" value="${p.link || ''}" placeholder="https://instagram.com/p/…"></label>
     <label class="field"><span>Date liée</span><select class="select" name="gig_id"><option value="">—</option>${gigs.map(g => html`<option value="${g.id}" ${String(p.gig_id) === String(g.id) ? raw('selected') : ''}>${g.title} · ${fmt.dayMonth(g.date)}</option>`)}</select></label>
     <label class="field"><span>Clip du Set Clipper</span><select class="select" name="clip_id"><option value="">—</option>${clips.map(c => html`<option value="${c.id}" ${String(p.clip_id) === String(c.id) ? raw('selected') : ''}>${c.title} (${c.format})</option>`)}</select></label>
-    <label class="field full"><span>Légende</span><textarea class="textarea" name="caption">${p.caption || ''}</textarea></label>
+    <label class="field full"><span>Légende</span><textarea class="textarea" name="caption" id="post-caption" rows="5">${p.caption || ''}</textarea></label>
+    <div class="field full"><span>Visuel prêt à poster</span><input type="hidden" name="visual_url" value="${p.visual_url || ''}"><div id="post-visual">${visualBlock(p.visual_url, '#post-caption')}</div></div>
     <p class="full eyebrow" style="margin-top:4px">Statistiques (à recopier depuis l'application du réseau)</p>
     ${[['views', 'Vues'], ['likes', 'Likes'], ['comments', 'Commentaires'], ['shares', 'Partages'], ['saves', 'Enregistrements'], ['followers_gained', 'Abonnés gagnés']].map(([k, l]) => html`<label class="field"><span>${l}</span><input class="input" type="number" min="0" name="${k}" value="${p[k] ?? ''}"></label>`)}
     <div class="full row spread">${p.id ? html`<button type="button" class="btn ghost danger" data-del>${icon('trash')}Supprimer</button>` : html`<span></span>`}
       <div class="row"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary">Enregistrer</button></div></div></form>`,
   mount: (d, close) => {
     const f = d.querySelector('form');
+    bindCopy(f);
+    // Studio visuel : textes préremplis depuis la publication et la date liée
+    f.addEventListener('click', e => {
+      if (!e.target.closest('[data-visual]')) return;
+      const v = formData(f), g = gigs.find(x => String(x.id) === String(v.gig_id)), dj = state.me.dj || {};
+      const day = g?.date || v.planned_date;
+      openVisualStudio({
+        network: v.network, format: v.format, caption: v.caption, styles: dj.styles || [], city: state.me.city,
+        photos: [dj.photo, dj.cover, ...(dj.gallery || []), state.me.avatar, ...CLUB_PHOTOS],
+        texts: { kicker: day ? new Date(day + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '') : '',
+          title: g?.title || v.title || '', subtitle: [g?.venue, g?.city].filter(Boolean).join(', '),
+          info: g?.start_time ? `${g.start_time}${g.end_time ? ' – ' + g.end_time : ''}` : '', handle: dj.instagram ? '@' + String(dj.instagram).replace(/^@|.*instagram\.com\//g, '').replace(/\/$/, '') : '' },
+        onSave: ({ visual_url, caption }) => { f.visual_url.value = visual_url; f.caption.value = caption; d.querySelector('#post-visual').innerHTML = visualBlock(visual_url, '#post-caption').s; },
+      });
+    });
     f.addEventListener('submit', async e => { e.preventDefault(); await act(f.querySelector('.primary'), () => p.id ? api.patch('/api/studio/posts/' + p.id, formData(f)) : api.post('/api/studio/posts', formData(f)), 'Publication enregistrée'); close(); done(); });
     d.querySelector('[data-del]')?.addEventListener('click', async () => { if (await confirmBox('Supprimer cette publication ?', { ok: 'Supprimer', danger: true })) { await api.del('/api/studio/posts/' + p.id); close(); done(); } });
   } });
@@ -107,7 +124,7 @@ export async function posts({ query, rerender }) {
   <div style="margin-bottom:14px">${notConnected}</div>
   <div class="seg" style="margin-bottom:14px">${[['all', 'Toutes'], ['idea', 'Idées'], ['planned', 'Programmées'], ['published', 'Publiées']].map(([k, l]) => html`<a href="?statut=${k}" class="${tab === k ? 'on' : ''}">${l} (${k === 'all' ? lists.items.length : lists.items.filter(p => p.status === k).length})</a>`)}</div>
   ${items.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>Publication</th><th>Réseau</th><th>Date</th><th>Statut</th><th style="text-align:right">Vues</th><th style="text-align:right">Likes</th><th style="text-align:right">Engagement</th><th style="text-align:right">Abonnés</th></tr></thead><tbody>
-    ${items.map(p => html`<tr data-post="${p.id}" style="cursor:pointer"><td><b>${p.title}</b> ${p.is_example ? html`<span class="tag">exemple</span>` : ''}<div class="tiny muted">${[p.format, p.gig_title && `date : ${p.gig_title}`, p.clip_title && `clip : ${p.clip_title}`].filter(Boolean).join(' · ')}</div></td>
+    ${items.map(p => html`<tr data-post="${p.id}" style="cursor:pointer"><td>${p.visual_url ? html`<span class="vs-thumbnail" style="background-image:url('${p.visual_url}');margin-right:8px"></span>` : ''}<b>${p.title}</b> ${p.is_example ? html`<span class="tag">exemple</span>` : ''}<div class="tiny muted">${[p.format, p.gig_title && `date : ${p.gig_title}`, p.clip_title && `clip : ${p.clip_title}`].filter(Boolean).join(' · ')}</div></td>
       <td>${p.network}</td><td class="small">${fmt.dayMonth(p.published_date || p.planned_date)}</td><td>${chip(POST_STATUS, p.status)}</td>
       <td class="num" style="text-align:right">${num(p.views)}</td><td class="num" style="text-align:right">${num(p.likes)}</td><td class="num" style="text-align:right">${p.engagement != null ? dec(p.engagement) + ' %' : '—'}</td><td class="num" style="text-align:right">${p.followers_gained != null ? '+' + p.followers_gained : '—'}</td></tr>`)}
   </tbody></table></div>` : empty('Aucune publication', 'Ajoute une idée ou une publication pour commencer le suivi.')}`,

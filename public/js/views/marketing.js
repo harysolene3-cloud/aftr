@@ -2,6 +2,7 @@
 import { html, raw, api, state, icon, bg, fmt, toast, modal, confirmBox, formData, empty, notice, $, $$, on, act, select, chip, CAL_STATUS, today, addDays } from '../core.js';
 import { navigate } from '../app.js';
 import { calendarGrid } from './studio.js';
+import { openVisualStudio, visualBlock, bindCopy, CLUB_PHOTOS } from '../visual.js';
 
 const STATUSES = ['idea', 'draft', 'review', 'approved', 'scheduled', 'published', 'archived'];
 const NETWORKS = ['Instagram', 'TikTok', 'LinkedIn', 'Facebook'];
@@ -87,7 +88,7 @@ export async function social({ rerender }) {
       <form class="card stack" id="draft" hidden style="--gap:12px"></form>
     </div>
     <div class="card"><div class="card-h"><h3>Contenus enregistrés</h3><span class="tiny muted">${items.length}</span></div>
-      <div class="list">${items.map(c => html`<div class="item"><span class="chip">${c.network}</span><div class="grow"><div class="item-title small truncate">${c.topic || c.idea}</div><div class="item-sub">${c.scheduled_date ? fmt.dateShort(c.scheduled_date) : 'sans date'}</div></div>
+      <div class="list">${items.map(c => html`<div class="item">${c.visual_url ? html`<span class="vs-thumbnail" style="background-image:url('${c.visual_url}')"></span>` : ''}<span class="chip">${c.network}</span><div class="grow"><div class="item-title small truncate">${c.topic || c.idea}</div><div class="item-sub">${c.scheduled_date ? fmt.dateShort(c.scheduled_date) : 'sans date'}</div></div>
         <select class="select sm" data-status="${c.id}" style="width:130px">${STATUSES.map(s => html`<option value="${s}" ${c.status === s ? raw('selected') : ''}>${CAL_STATUS[s][0]}</option>`)}</select>
         <button class="btn sm ghost" data-open="${c.id}" aria-label="Modifier">${icon('edit')}</button><button class="btn sm ghost danger" data-del="${c.id}" aria-label="Supprimer">${icon('trash')}</button></div>`)}</div></div>
   </div>`,
@@ -99,14 +100,26 @@ export async function social({ rerender }) {
         <input type="hidden" name="id" value="${c.id || ''}">${['network', 'topic', 'target', 'objective', 'tone', 'format'].map(k => html`<input type="hidden" name="${k}" value="${c[k] || ''}">`)}
         <label class="field"><span>Idée de publication</span><input class="input" name="idea" value="${c.idea || ''}"></label>
         <label class="field"><span>Accroche</span><input class="input" name="hook" value="${c.hook || ''}"></label>
-        <label class="field"><span>Légende</span><textarea class="textarea" name="caption" rows="7">${c.caption || ''}</textarea></label>
+        <label class="field"><span>Légende</span><textarea class="textarea" name="caption" id="draft-caption" rows="7">${c.caption || ''}</textarea></label>
         <div class="form-grid"><label class="field"><span>Appel à l'action</span><input class="input" name="cta" value="${c.cta || ''}"></label><label class="field"><span>Hashtags</span><input class="input" name="hashtags" value="${c.hashtags || ''}"></label></div>
         <label class="field"><span>Idée de visuel</span><input class="input" name="visual" value="${c.visual || ''}"></label>
+        <div class="field"><span>Visuel prêt à poster</span><input type="hidden" name="visual_url" value="${c.visual_url || ''}"><div id="draft-visual">${visualBlock(c.visual_url, '#draft-caption')}</div></div>
         <div class="form-grid"><label class="field"><span>Date de publication${c.recommended_time ? ` (recommandé : ${c.recommended_time})` : ''}</span><input class="input" type="date" name="scheduled_date" value="${c.scheduled_date || ''}"></label>
           <label class="field"><span>Statut</span>${select('status', STATUSES.map(s => [s, CAL_STATUS[s][0]]), c.status || 'draft')}</label></div>
         <div class="row"><button class="btn primary">${icon('check')}Enregistrer${c.id ? '' : ' et ajouter au calendrier'}</button></div>`.s;
       draft.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
+    bindCopy(draft);
+    draft.addEventListener('click', e => {
+      if (!e.target.closest('[data-visual]')) return;
+      const c = formData(draft);
+      openVisualStudio({
+        network: c.network, format: c.format, brand: '#aftr', hashtags: c.hashtags,
+        caption: [c.caption, c.cta, c.hashtags].filter(Boolean).join('\n\n'), photos: CLUB_PHOTOS,
+        texts: { kicker: c.format || 'AFTR', title: c.hook || c.topic || '', subtitle: c.cta || '', info: c.target ? 'Pour : ' + c.target : '', handle: '@aftr.app' },
+        onSave: ({ visual_url, caption }) => { draft.visual_url.value = visual_url; draft.caption.value = caption; $('#draft-visual', draft).innerHTML = visualBlock(visual_url, '#draft-caption').s; },
+      });
+    });
     $('#gen', v).addEventListener('submit', async e => { e.preventDefault(); const { content } = await act(e.target.querySelector('button'), () => api.post('/api/admin/social/generate', formData(e.target))); showDraft(content); });
     draft.addEventListener('submit', async e => { e.preventDefault(); const d = formData(draft); await act(draft.querySelector('.primary'), () => d.id ? api.patch('/api/admin/contents/' + d.id, d) : api.post('/api/admin/contents', d), 'Contenu enregistré'); rerender(); });
     on(v, 'click', '[data-open]', (e, b) => showDraft(items.find(x => x.id === Number(b.dataset.open))));

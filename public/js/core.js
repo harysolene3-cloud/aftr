@@ -39,8 +39,9 @@ export const api = {
   del: url => request('DELETE', url),
   async upload(file) {
     const res = await fetch('/api/uploads', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name), 'Content-Type': 'application/octet-stream' }, body: file });
-    const data = await res.json();
-    if (!res.ok) throw new ApiError(res.status, data.error);
+    const data = res.headers.get('content-type')?.includes('json') ? await res.json() : null;
+    if (res.status === 413) throw new ApiError(413, 'Fichier trop lourd pour la version en ligne (4,5 Mo maximum).');
+    if (!res.ok) throw new ApiError(res.status, data?.error || 'Envoi du fichier impossible.');
     return data;
   },
 };

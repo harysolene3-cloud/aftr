@@ -17,6 +17,8 @@ const engagement = p => p.views ? ((p.likes || 0) + (p.comments || 0) + (p.share
 const pct = x => x == null ? null : Math.round(x * 1000) / 10;
 const fr = n => String(n).replace('.', ',');
 
+// Visuel : seulement un fichier envoyé sur AFTR
+const visualUrl = v => v && /^\/uploads\/[a-f0-9]+\.png$/.test(v) ? v : null;
 function postFields(body) {
   return [
     oneOf(body.network, NETWORKS, 'Réseau'), body.format ? oneOf(body.format, FORMATS, 'Format') : null,
@@ -24,6 +26,7 @@ function postFields(body) {
     body.clip_id ? Number(body.clip_id) : null, body.gig_id ? Number(body.gig_id) : null,
     oneOf(body.status || 'idea', ['idea', 'planned', 'published'], 'Statut'), date(body.planned_date), date(body.published_date),
     ...['views', 'likes', 'comments', 'shares', 'saves', 'followers_gained'].map(k => int(body[k], { label: 'Statistique' })),
+    visualUrl(body.visual_url),
   ];
 }
 const own = (id, userId) => get('SELECT * FROM studio_posts WHERE id = ? AND owner_id = ?', id, userId) || fail(404, 'Publication introuvable.');
@@ -33,20 +36,20 @@ route('GET', '/api/studio/posts', ({ user }) => ({
     LEFT JOIN studio_clips c ON c.id = p.clip_id LEFT JOIN studio_gigs g ON g.id = p.gig_id
     WHERE p.owner_id = ? ORDER BY COALESCE(p.published_date, p.planned_date, substr(p.created_at, 1, 10)) DESC`, user.id)
     .map(p => ({ ...p, engagement: pct(engagement(p)) })),
-  gigs: all("SELECT id, title, date FROM studio_gigs WHERE owner_id = ? AND status != 'cancelled' ORDER BY date DESC", user.id),
+  gigs: all("SELECT id, title, date, venue, city, start_time, end_time FROM studio_gigs WHERE owner_id = ? AND status != 'cancelled' ORDER BY date DESC", user.id),
   clips: all('SELECT id, title, format FROM studio_clips WHERE owner_id = ? ORDER BY created_at DESC', user.id),
 }), opt);
 
 route('POST', '/api/studio/posts', ({ user, body }) => ({
-  id: insert(`INSERT INTO studio_posts (owner_id, network, format, title, caption, link, clip_id, gig_id, status, planned_date, published_date, views, likes, comments, shares, saves, followers_gained, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, user.id, ...postFields(body), now()),
+  id: insert(`INSERT INTO studio_posts (owner_id, network, format, title, caption, link, clip_id, gig_id, status, planned_date, published_date, views, likes, comments, shares, saves, followers_gained, visual_url, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, user.id, ...postFields(body), now()),
 }), opt);
 route('PATCH', '/api/studio/posts/:id', ({ user, params, body }) => {
   const p = own(params.id, user.id);
   const merged = { ...p, ...body };
   if (body.status === 'published' && !merged.published_date) merged.published_date = today();
   run(`UPDATE studio_posts SET network = ?, format = ?, title = ?, caption = ?, link = ?, clip_id = ?, gig_id = ?, status = ?, planned_date = ?, published_date = ?,
-    views = ?, likes = ?, comments = ?, shares = ?, saves = ?, followers_gained = ?, is_example = 0 WHERE id = ? AND owner_id = ?`, ...postFields(merged), p.id, user.id);
+    views = ?, likes = ?, comments = ?, shares = ?, saves = ?, followers_gained = ?, visual_url = ?, is_example = 0 WHERE id = ? AND owner_id = ?`, ...postFields(merged), p.id, user.id);
   return { ok: true };
 }, opt);
 route('DELETE', '/api/studio/posts/:id', ({ user, params }) => { own(params.id, user.id); run('DELETE FROM studio_posts WHERE id = ? AND owner_id = ?', params.id, user.id); return { ok: true }; }, opt);
