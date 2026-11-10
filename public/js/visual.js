@@ -354,3 +354,13 @@ export function bindCopy(root) {
     try { await navigator.clipboard.writeText(t); toast('Légende copiée'); } catch { toast('Copie impossible : sélectionne le texte.', 'error'); }
   });
 }
+
+/** Dessine un modèle sur un canvas (utilisé par la page Communication pour les visuels des posts). */
+export async function drawTemplate(canvas, { tpl = 'affiche', size = 'post', pal = 'nuit', texts = {}, photo = null, scale = 1 } = {}) {
+  await fontsReady();
+  const im = photo ? await loadImage(img(photo, 1200)).catch(() => null) : null;
+  const [W, H] = SIZES[size];
+  canvas.width = W * scale; canvas.height = H * scale;
+  const ctx = canvas.getContext('2d'); ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  TEMPLATES[tpl].draw(ctx, W, H, { kicker: '', title: '', subtitle: '', info: '', handle: '', ...texts }, PALETTES[pal], im);
+}

@@ -11,7 +11,12 @@ const ROUTES = [
   R('/communaute', 'site', 'communityPage', { layout: 'site' }),
   R('/business-studio', 'site', 'studioPage', { layout: 'site' }),
   R('/organisateurs', 'site', 'organizersPage', { layout: 'site' }),
-  R('/tarifs', 'site', 'pricing', { layout: 'site' }),
+  R('/tarifs', 'project', 'offer', { layout: 'site' }),
+  R('/commande', 'project', 'checkout', { layout: 'site' }),
+  R('/commande/confirmation/:ref', 'project', 'confirmation', { layout: 'site' }),
+  R('/crm', 'project', 'crmEntry', { layout: 'site' }),
+  R('/strategie', 'project', 'strategy', { layout: 'site' }),
+  R('/communication', 'project', 'communication', { layout: 'site' }),
   R('/contact', 'site', 'contact', { layout: 'site' }),
   R('/mentions-legales', 'site', 'legal', { layout: 'site' }),
   R('/confidentialite', 'site', 'privacy', { layout: 'site' }),
@@ -116,10 +121,9 @@ document.addEventListener('click', async e => {
 });
 
 // ───────── Gabarit du site public
-const demoStrip = html`<div class="demo-strip">Démonstration · projet de Master 2 · toutes les données sont fictives</div>`;
 function siteShell() {
-  const links = [['/artistes', 'Artistes'], ['/communaute', 'Communauté'], ['/business-studio', 'Business Studio'], ['/organisateurs', 'Organisateurs'], ['/tarifs', 'Tarifs']];
-  return html`${demoStrip}
+  const links = [['/artistes', 'Artistes'], ['/business-studio', 'Business Studio'], ['/tarifs', 'Offre & prix'], ['/crm', 'CRM'], ['/strategie', 'Stratégie'], ['/communication', 'Communication']];
+  return html`
   <nav class="site-nav"><div class="wrap inner">
     <a href="/" class="logo" aria-label="AFTR, accueil">AFT<i>R</i></a>
     <div class="site-links" id="site-links">${links.map(([h, l]) => html`<a href="${h}" class="${location.pathname.startsWith(h) ? 'on' : ''}">${l}</a>`)}</div>
@@ -134,10 +138,10 @@ function siteShell() {
     <div class="cols">
       <div class="stack" style="--gap:12px"><a href="/" class="logo">AFT<i>R</i></a><p>La plateforme qui connecte la culture musicale, la communauté et le business des DJs.</p>${themeSeg()}</div>
       <div><h4>Plateforme</h4><ul><li><a href="/artistes">Découvrir les DJs</a></li><li><a href="/communaute">Communauté</a></li><li><a href="/business-studio">Business Studio</a></li><li><a href="/organisateurs">Organisateurs</a></li></ul></div>
-      <div><h4>AFTR</h4><ul><li><a href="/fonctionnalites">Fonctionnalités</a></li><li><a href="/tarifs">Tarifs</a></li><li><a href="/contact">Contact</a></li></ul></div>
+      <div><h4>Le projet</h4><ul><li><a href="/tarifs">Offre et prix</a></li><li><a href="/crm">CRM</a></li><li><a href="/strategie">Dossier stratégique</a></li><li><a href="/communication">Plan de communication</a></li><li><a href="/fonctionnalites">Fonctionnalités</a></li><li><a href="/contact">Contact</a></li></ul></div>
       <div><h4>Légal</h4><ul><li><a href="/mentions-legales">Mentions légales</a></li><li><a href="/confidentialite">Confidentialité</a></li></ul></div>
     </div>
-    <p class="tiny faint">Projet fictif réalisé dans le cadre d'un Master 2 en marketing digital. Photos : Unsplash (licence Unsplash). Aucune donnée réelle.</p>
+    <p class="tiny faint">Projet étudiant INSEEC, démo sans vente réelle. Paiements simulés, données de démonstration fictives (à l'exception du profil de la DJ Anjara, utilisé avec son accord). Photos : Unsplash (licence Unsplash).</p>
   </div></footer>`;
 }
 

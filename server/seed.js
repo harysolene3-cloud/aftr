@@ -1,6 +1,7 @@
 // Données de démonstration : 100 % fictives, datées par rapport au jour courant
 // pour que la démo reste crédible quel que soit le jour de la soutenance.
-import { run, insert, tx, today, addDays } from './db.js';
+import { run, insert, all, tx, today, addDays } from './db.js';
+import { priceOf } from './routes/project.js';
 import { hashPassword } from './http.js';
 
 export const DEMO_PASSWORD = 'aftr2026';
@@ -412,7 +413,7 @@ export function seed() {
     const L = {
       entrepot: lead('Sophie Lambert', 'programmation@entrepot.exemple', 'Lille', 'venue', 'demo', 'Salon Nuits Pro', companies.entrepot, ['Club', 'Nord'], 'Démo de la marketplace faite, intéressée par l\'offre Organisateur Plus.', -40),
       panorama: lead('Damien Petit', 'contact@panorama.exemple', 'Marseille', 'venue', 'contacted', 'LinkedIn', companies.panorama, ['Rooftop'], null, -25),
-      ecole: lead('Rachid Amrani', 'partenariats@ecole-pro-dj.exemple', 'Paris', 'partner', 'negotiation', 'Événement', companies.ecole, ['Formation', 'Partenariat'], 'Partenariat : 3 mois de DJ Pro offerts aux élèves contre visibilité.', -30),
+      ecole: lead('Rachid Amrani', 'partenariats@ecole-pro-dj.exemple', 'Paris', 'partner', 'demo', 'Événement', companies.ecole, ['Formation', 'Partenariat'], 'Partenariat : 3 mois de DJ Pro offerts aux élèves contre visibilité.', -30),
       mag: lead('Élodie Vasseur', 'redaction@bassesfrequences.exemple', 'Paris', 'press', 'contacted', 'Relations presse', companies.mag, ['Presse'], 'Article sur les outils numériques des DJs.', -15),
       brasserie: lead('Olivier Garnier', 'events@brasseries-sud.exemple', 'Montpellier', 'organizer', 'lead', 'Prospection', companies.brasserie, ['Bars', 'Multi-sites'], '12 bars : potentiel de soirées récurrentes.', -20),
       lyonevents: lead('Agence Lyon Events (fictive)', 'hello@lyonevents.exemple', 'Lyon', 'organizer', 'lead', 'Prospection', null, ['Agence'], null, -22),
@@ -427,6 +428,29 @@ export function seed() {
     aTask(L.entrepot, 'Envoyer l\'offre Organisateur Plus personnalisée', 1);
     aTask(L.ecole, 'Rédiger la convention de partenariat', 4);
     aTask(L.mag, 'Préparer les chiffres clés pour l\'article', 6);
+    aTask(L.panorama, 'Relancer avec le comparatif des offres', 2);
+    aTask(L.brasserie, 'Premier appel de découverte', 1);
+    aTask(L.lyonevents, 'Envoyer la présentation AFTR par e-mail', 3);
+    aTask(L.wedding, 'Recontacter en février avant la saison des mariages', 90);
+
+    // Pipeline commercial : un membre payant est « Gagné », un inscrit gratuit est un prospect pour l'offre payante
+    run(`UPDATE admin_contacts SET stage = 'lead' WHERE user_id IS NOT NULL AND user_id NOT IN
+      (SELECT user_id FROM subscriptions WHERE plan IN ('dj_pro', 'org_plus') AND status = 'active')`);
+    const free = all("SELECT id, name, segment FROM admin_contacts WHERE user_id IS NOT NULL AND stage = 'lead' ORDER BY id");
+    free.forEach((c, i) => {
+      if (i % 5 === 1) { run("UPDATE admin_contacts SET stage = 'contacted' WHERE id = ?", c.id); ai(c.id, 'email', c.segment === 'dj' ? 'E-mail : présentation de DJ Pro (devis, factures, Set Clipper).' : 'E-mail : présentation d\'Organisateur Plus.', -(3 + i % 9)); aTask(c.id, 'Relancer si pas de réponse', 1 + i % 6); }
+      else if (i % 7 === 2) { run("UPDATE admin_contacts SET stage = 'demo' WHERE id = ?", c.id); ai(c.id, 'call', 'Appel : besoins validés, proposition envoyée (offre annuelle).', -(2 + i % 5)); aTask(c.id, 'Appeler pour la décision sur la proposition', 2 + i % 4); }
+      else if (i % 11 === 4) { run("UPDATE admin_contacts SET stage = 'lost' WHERE id = ?", c.id); ai(c.id, 'note', 'Pas intéressé pour l\'instant : reste en formule gratuite.', -(10 + i % 20)); }
+      else if (i % 3 === 0) aTask(c.id, 'Envoyer l\'e-mail de bienvenue et proposer un essai Pro', 1 + i % 8);
+    });
+    // Coordonnées fictives (indicatif réservé à la fiction)
+    for (const c of all('SELECT id FROM admin_contacts WHERE phone IS NULL')) run('UPDATE admin_contacts SET phone = ? WHERE id = ?', `06 00 00 ${String(10 + c.id % 89).padStart(2, '0')} ${String(c.id * 7 % 100).padStart(2, '0')}`, c.id);
+    // Commandes historiques (paiement simulé) des membres payants
+    for (const sb of all("SELECT s.user_id, s.plan, s.started_at, c.id contact_id, c.name, c.email, c.city, c.source FROM subscriptions s JOIN admin_contacts c ON c.user_id = s.user_id WHERE s.plan IN ('dj_pro', 'org_plus') AND s.status = 'active'")) {
+      const period = sb.user_id % 2 ? 'yearly' : 'monthly', p = priceOf(sb.plan, period);
+      insert('INSERT INTO orders (ref, offer, period, amount_ht, vat, amount_ttc, name, email, city, source, contact_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        `CMD-2026-${(1000 + sb.user_id).toString(16).toUpperCase()}`, sb.plan, period, p.ht, p.vat, p.ttc, sb.name, sb.email, sb.city, sb.source, sb.contact_id, sb.started_at);
+    }
 
     // Support
     const ticket = (userIdOrNull, name, email, subject, category, status, priority, days, msgs) => {

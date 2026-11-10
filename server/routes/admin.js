@@ -6,9 +6,10 @@ import { seed } from '../seed.js';
 import { STATUS_LABEL } from './marketplace.js';
 
 const opt = { role: 'admin' };
-export const PLANS = { dj_free: { label: 'DJ Free', price: 0 }, dj_pro: { label: 'DJ Pro', price: 12 }, org_free: { label: 'Organisateur Free', price: 0 }, org_plus: { label: 'Organisateur Plus', price: 29 } };
+export const PLANS = { dj_free: { label: 'DJ Free', price: 0 }, dj_pro: { label: 'DJ Pro', price: 12.42 }, org_free: { label: 'Organisateur Free', price: 0 }, org_plus: { label: 'Organisateur Plus', price: 29 } };
 export const COMMISSION = 0.08;
-const CRM_STAGES = ['lead', 'contacted', 'demo', 'negotiation', 'customer', 'lost'];
+const CRM_STAGES = ['lead', 'contacted', 'demo', 'customer', 'lost'];
+const STAGE_L = { lead: 'Nouveau', contacted: 'Contacté', demo: 'Proposition envoyée', customer: 'Gagné', lost: 'Perdu' };
 const SEGMENTS = ['dj', 'organizer', 'venue', 'partner', 'press'];
 
 function log(user, action, detail) { insert('INSERT INTO audit_log (admin_id, action, detail, created_at) VALUES (?, ?, ?, ?)', user.id, action, detail ?? null, now()); }
@@ -60,7 +61,8 @@ function contactRow(c) {
   const u = c.user_id ? userSummary(c.user_id) : null;
   const company = c.company_id ? get('SELECT id, name FROM admin_companies WHERE id = ?', c.company_id) : null;
   const requests = c.user_id ? get('SELECT COUNT(*) n FROM booking_requests WHERE dj_id = ? OR organizer_id = ?', c.user_id, c.user_id).n : 0;
-  return { ...c, tags: J(c.tags), user: u, company, requests, avatar: u?.dj?.photo || u?.organizer?.photo || u?.avatar || null, last_active_at: u?.last_active_at || null };
+  const next = get('SELECT title, due_date FROM admin_tasks WHERE contact_id = ? AND done = 0 ORDER BY due_date LIMIT 1', c.id) || null;
+  return { ...c, tags: J(c.tags), user: u, company, requests, next, avatar: u?.dj?.photo || u?.organizer?.photo || u?.avatar || null, last_active_at: u?.last_active_at || null };
 }
 
 function filteredContacts(query) {
@@ -85,7 +87,18 @@ route('GET', '/api/admin/contacts', ({ query }) => ({
     cities: all('SELECT DISTINCT city FROM admin_contacts WHERE city IS NOT NULL ORDER BY city').map(r => r.city),
   },
   pipeline: Object.fromEntries(CRM_STAGES.map(s => [s, get('SELECT COUNT(*) n FROM admin_contacts WHERE stage = ?', s).n])),
+  kpis: crmKpis(),
+  orders: all('SELECT ref, offer, period, amount_ht, amount_ttc, name, contact_id, created_at FROM orders ORDER BY created_at DESC LIMIT 8'),
 }), opt);
+
+// Tableau de bord du CRM : chiffre d'affaires (commandes simulées), clients et taux de conversion
+function crmKpis() {
+  const total = get('SELECT COUNT(*) n FROM admin_contacts').n, won = get("SELECT COUNT(*) n FROM admin_contacts WHERE stage = 'customer'").n, lost = get("SELECT COUNT(*) n FROM admin_contacts WHERE stage = 'lost'").n;
+  const rev = get('SELECT COALESCE(SUM(amount_ht), 0) ht, COUNT(*) n FROM orders');
+  return { revenue_ht: Math.round(rev.ht * 100) / 100, orders: rev.n, customers: won, contacts: total, lost,
+    conversion: total ? Math.round(won / total * 1000) / 10 : 0, win_rate: won + lost ? Math.round(won / (won + lost) * 1000) / 10 : 0,
+    mrr: Math.round(all("SELECT plan FROM subscriptions WHERE status = 'active'").reduce((s, r) => s + PLANS[r.plan].price, 0) * 100) / 100 };
+}
 
 route('GET', '/api/admin/contacts/:id', ({ params }) => {
   const c = get('SELECT * FROM admin_contacts WHERE id = ?', params.id) || fail(404, 'Contact introuvable.');
@@ -127,7 +140,7 @@ route('PATCH', '/api/admin/contacts/:id', ({ user, params, body }) => {
   const c = get('SELECT * FROM admin_contacts WHERE id = ?', params.id) || fail(404, 'Contact introuvable.');
   run('UPDATE admin_contacts SET name = ?, email = ?, phone = ?, city = ?, segment = ?, stage = ?, source = ?, tags = ?, notes = ?, company_id = ? WHERE id = ?',
     ...contactFields({ ...c, tags: J(c.tags), ...body }), c.id);
-  if (body.stage && body.stage !== c.stage) insert('INSERT INTO admin_interactions (contact_id, admin_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?)', c.id, user.id, 'stage', `Étape : ${body.stage}`, now());
+  if (body.stage && body.stage !== c.stage) insert('INSERT INTO admin_interactions (contact_id, admin_id, kind, body, created_at) VALUES (?, ?, ?, ?, ?)', c.id, user.id, 'stage', `Étape : ${STAGE_L[body.stage] || body.stage}`, now());
   return { ok: true };
 }, opt);
 route('DELETE', '/api/admin/contacts/:id', ({ user, params }) => {

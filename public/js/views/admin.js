@@ -3,7 +3,9 @@
 import { html, raw, api, state, icon, bg, fmt, avatar, toast, modal, confirmBox, formData, empty, notice, $, $$, on, act, select, chip, BOOKING, today } from '../core.js';
 import { navigate } from '../app.js';
 
-export const CRM_STAGES = [['lead', 'Prospect'], ['contacted', 'Contacté'], ['demo', 'Démo faite'], ['negotiation', 'Négociation'], ['customer', 'Client / membre'], ['lost', 'Perdu']];
+export const CRM_STAGES = [['lead', 'Nouveau'], ['contacted', 'Contacté'], ['demo', 'Proposition envoyée'], ['customer', 'Gagné'], ['lost', 'Perdu']];
+const NEXT = { lead: 'contacted', contacted: 'demo', demo: 'customer' };
+const eur2 = n => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n || 0);
 export const SEGMENTS = [['dj', 'DJ'], ['organizer', 'Organisateur'], ['venue', 'Lieu'], ['partner', 'Partenaire'], ['press', 'Presse']];
 const stageL = s => CRM_STAGES.find(x => x[0] === s)?.[1] || s;
 const segL = s => SEGMENTS.find(x => x[0] === s)?.[1] || s;
@@ -40,11 +42,21 @@ export async function overview() {
 // ───────── CRM central
 export async function crm({ query }) {
   const qs = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
-  const { items, facets, pipeline } = await api.get('/api/admin/contacts?' + qs);
+  const { items, facets, pipeline, kpis: k, orders } = await api.get('/api/admin/contacts?' + qs);
+  const vue = query.vue === 'liste' ? 'liste' : 'pipeline';
+  const link = extra => '?' + new URLSearchParams(Object.entries({ ...query, ...extra }).filter(([, x]) => x));
   return { title: 'CRM central', html: html`
   <div class="view-h"><div><p class="eyebrow accent">AFTR Admin</p><h1>CRM central</h1><p>Membres de la plateforme et prospects de l'équipe. Les fiches reflètent l'activité sur AFTR, jamais les données privées du Business Studio des DJs.</p></div>
-    <div class="row"><a class="btn" href="/api/admin/contacts.csv?${qs}" download>${icon('download')}Exporter CSV</a><button class="btn" id="import">${icon('upload')}Importer CSV</button><button class="btn primary" id="new">${icon('plus')}Nouveau contact</button></div></div>
-  <div class="row" style="margin-bottom:14px;--gap:8px">${CRM_STAGES.map(([k, l]) => html`<a class="chip ${query.stage === k ? 'solid' : ''}" href="?${new URLSearchParams({ ...query, stage: query.stage === k ? '' : k })}">${l} · ${pipeline[k]}</a>`)}</div>
+    <div class="row"><div class="seg"><a href="${link({ vue: 'pipeline' })}" class="${vue === 'pipeline' ? 'on' : ''}">Pipeline</a><a href="${link({ vue: 'liste' })}" class="${vue === 'liste' ? 'on' : ''}">Liste</a></div><a class="btn" href="/api/admin/contacts.csv?${qs}" download>${icon('download')}Exporter CSV</a><button class="btn" id="import">${icon('upload')}Importer CSV</button><button class="btn primary" id="new">${icon('plus')}Nouveau contact</button></div></div>
+  <div class="kpis" style="margin-bottom:16px">
+    <div class="kpi"><b>${eur2(k.revenue_ht)}</b><span>chiffre d'affaires HT · ${k.orders} commandes (paiement simulé)</span></div>
+    <div class="kpi"><b>${k.customers}</b><span>clients payants (étape « Gagné »)</span></div>
+    <div class="kpi"><b>${String(k.conversion).replace('.', ',')} %</b><span>taux de conversion : clients / ${k.contacts} contacts</span></div>
+    <div class="kpi"><b>${String(k.win_rate).replace('.', ',')} %</b><span>taux de signature : gagnés / (gagnés + perdus)</span></div>
+    <div class="kpi"><b>${eur2(k.mrr)}</b><span>revenu mensuel récurrent HT (abonnements actifs)</span></div>
+  </div>
+  ${orders.length ? html`<div class="card" style="margin-bottom:16px"><div class="card-h"><h3>Dernières commandes du site</h3><a class="tiny link" href="/tarifs">Passer une commande test →</a></div><div class="list">${orders.slice(0, 4).map(o => html`<a class="item" href="/app/admin/crm/${o.contact_id}"><span class="chip ok">${o.ref}</span><div class="grow"><div class="item-title truncate">${o.name}</div><div class="item-sub">${o.offer === 'dj_pro' ? 'DJ Pro' : 'Organisateur Plus'} ${o.period === 'yearly' ? 'annuel' : 'mensuel'} · ${fmt.ago(o.created_at)}</div></div><b class="num">${eur2(o.amount_ht)} HT</b></a>`)}</div></div>` : ''}
+  <div class="row" style="margin-bottom:14px;--gap:8px">${CRM_STAGES.map(([k, l]) => html`<a class="chip ${query.stage === k ? 'solid' : ''}" href="${link({ stage: query.stage === k ? '' : k })}">${l} · ${pipeline[k]}</a>`)}</div>
   <form class="card row" id="seg" style="--gap:10px;align-items:end;margin-bottom:16px">
     <label class="field grow" style="min-width:160px"><span>Recherche</span><input class="input sm" name="q" value="${query.q || ''}"></label>
     <label class="field"><span>Segment</span>${select('segment', [['', 'Tous'], ...SEGMENTS], query.segment, 'class="select sm"')}</label>
@@ -55,15 +67,21 @@ export async function crm({ query }) {
     <input type="hidden" name="stage" value="${query.stage || ''}">
     <span class="small muted">${items.length} contacts</span>
   </form>
-  <div class="table-wrap"><table class="table"><thead><tr><th>Contact</th><th>Segment</th><th>Étape</th><th>Source</th><th>Demandes</th><th>Dernière activité</th></tr></thead><tbody>
+  ${vue === 'pipeline' ? html`<div class="kanban">${CRM_STAGES.filter(([s]) => !query.stage || query.stage === s).map(([s, l]) => { const col = items.filter(c => c.stage === s); return html`<div class="kcol"><div class="kcol-h"><b>${l}</b><span class="tiny muted">${col.length}</span></div>
+    ${col.slice(0, 40).map(c => html`<div class="kcard" style="cursor:default"><a href="/app/admin/crm/${c.id}" class="item-title small truncate">${c.name}</a><div class="tiny muted truncate">${segL(c.segment)} · ${c.source || 'source inconnue'}</div>
+      ${c.next ? html`<div class="tiny truncate" title="Prochaine action">${icon('clock')} ${c.next.title} · ${fmt.dayMonth(c.next.due_date)}</div>` : ''}
+      <div class="row" style="--gap:6px">${NEXT[s] ? html`<button class="btn sm" data-advance="${c.id}" data-to="${NEXT[s]}">→ ${stageL(NEXT[s])}</button>` : ''}${s !== 'lost' && s !== 'customer' ? html`<button class="btn sm ghost" data-advance="${c.id}" data-to="lost" aria-label="Marquer perdu">Perdu</button>` : ''}</div></div>`)}
+    ${col.length > 40 ? html`<a class="tiny link" href="${link({ vue: 'liste', stage: s })}">+ ${col.length - 40} autres dans la liste</a>` : ''}</div>`; })}</div>` : html`
+  <div class="table-wrap"><table class="table"><thead><tr><th>Contact</th><th>Segment</th><th>Étape</th><th>Source</th><th>Prochaine action</th><th>Dernière activité</th></tr></thead><tbody>
     ${items.map(c => html`<tr data-href="/app/admin/crm/${c.id}"><td><div class="row nowrap">${avatar(c.name, c.avatar, 'sm')}<div><b>${c.name}</b><div class="tiny muted">${c.email || ''}${c.company ? ` · ${c.company.name}` : ''}</div></div></div></td>
       <td>${segL(c.segment)}${c.user_id ? html` <span class="chip" title="Compte membre">membre</span>` : ''}</td><td><span class="chip ${c.stage === 'customer' ? 'ok' : c.stage === 'lost' ? 'off' : ''}">${stageL(c.stage)}</span></td>
-      <td class="small">${c.source || '—'}</td><td class="num">${c.requests}</td><td class="small">${c.last_active_at ? fmt.ago(c.last_active_at) : '—'}</td></tr>`)}
-  </tbody></table></div>`,
+      <td class="small">${c.source || '—'}</td><td class="small">${c.next ? `${c.next.title} · ${fmt.dayMonth(c.next.due_date)}` : '—'}</td><td class="small">${c.last_active_at ? fmt.ago(c.last_active_at) : '—'}</td></tr>`)}
+  </tbody></table></div>`}`,
   mount: v => {
     rowLink(v);
+    on(v, 'click', '[data-advance]', async (e, b) => { await act(b, () => api.patch('/api/admin/contacts/' + b.dataset.advance, { stage: b.dataset.to }), `Contact passé en « ${stageL(b.dataset.to)} »`); navigate(location.pathname + location.search); });
     const f = $('#seg', v);
-    f.addEventListener('change', () => navigate('/app/admin/crm?' + new URLSearchParams(Object.entries(formData(f)).filter(([, x]) => x))));
+    f.addEventListener('change', () => navigate('/app/admin/crm?' + new URLSearchParams(Object.entries({ ...formData(f), vue: query.vue }).filter(([, x]) => x))));
     f.addEventListener('submit', e => { e.preventDefault(); f.dispatchEvent(new Event('change')); });
     $('#new', v).onclick = () => contactModal(null, id => navigate('/app/admin/crm/' + id));
     $('#import', v).onclick = importModal;
@@ -137,7 +155,7 @@ export async function crmContact({ params, rerender }) {
         ${c.tags.length ? html`<div class="tags">${c.tags.map(t => html`<span class="tag">${t}</span>`)}</div>` : ''}${c.notes ? html`<div class="panel small">${c.notes}</div>` : ''}
         ${c.user?.plans?.length ? html`<div class="small">Formule : ${c.user.plans.map(x => PLAN_L[x.plan]).join(', ')}</div>` : ''}
         ${c.user?.dj ? html`<a class="btn sm" href="/app/djs/${c.user.dj.slug}">Voir le profil public</a>` : ''}</div>
-      <div class="card"><div class="card-h"><h3>Tâches & rappels</h3></div>
+      <div class="card"><div class="card-h"><h3>Prochaine action & rappels</h3></div>
         <div class="list">${c.tasks.map(t => html`<label class="item check"><input type="checkbox" data-task="${t.id}" ${t.done ? raw('checked') : ''}><div class="grow" style="${t.done ? 'opacity:.5;text-decoration:line-through' : ''}"><div class="small" style="font-weight:600">${t.title}</div><div class="tiny muted">${t.due_date ? fmt.date(t.due_date) : ''}</div></div></label>`)}</div>
         <form class="row" id="task" style="margin-top:10px"><input class="input sm grow" name="title" required placeholder="Nouvelle tâche"><input class="input sm" type="date" name="due_date" style="width:140px"><button class="btn sm">Ajouter</button></form></div>
     </aside>

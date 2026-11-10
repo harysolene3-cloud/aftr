@@ -461,6 +461,18 @@ CREATE TABLE audit_log (
 );
 `;
 
+// Commandes passées depuis l'espace de vente (paiement simulé)
+const ORDERS_DDL = `CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY,
+  ref TEXT UNIQUE NOT NULL,
+  offer TEXT NOT NULL, period TEXT NOT NULL,
+  amount_ht REAL NOT NULL, vat REAL NOT NULL, amount_ttc REAL NOT NULL,
+  name TEXT NOT NULL, email TEXT NOT NULL, city TEXT, company TEXT, source TEXT,
+  contact_id INTEGER REFERENCES admin_contacts(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'paid_simulated',
+  created_at TEXT NOT NULL
+);`;
+
 export let db;
 
 export function openDb({ fresh = false } = {}) {
@@ -471,6 +483,8 @@ export function openDb({ fresh = false } = {}) {
   db = new DatabaseSync(DB_FILE);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   if (isNew) db.exec(SCHEMA);
+  db.exec(ORDERS_DDL);
+  db.exec("UPDATE admin_contacts SET stage = 'demo' WHERE stage = 'negotiation'");
   // Ajouts de colonnes sur une base existante
   for (const [t, c] of [['studio_posts', 'visual_url'], ['marketing_contents', 'visual_url']])
     if (!db.prepare(`PRAGMA table_info(${t})`).all().some(x => x.name === c)) db.exec(`ALTER TABLE ${t} ADD COLUMN ${c} TEXT`);

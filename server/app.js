@@ -12,6 +12,7 @@ import './routes/studio.js';
 import './routes/admin.js';
 import './routes/marketing.js';
 import './routes/djmarketing.js';
+import './routes/project.js';
 
 const PUBLIC_DIR = join(ROOT, 'public');
 const TYPES = {

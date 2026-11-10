@@ -44,7 +44,7 @@ export function djProfileBody(dj, { actions = '' } = {}) {
         ${dj.gallery.length ? html`<section class="stack" style="--gap:10px"><p class="eyebrow">Photos</p><div class="gallery">${dj.gallery.map(g => html`<div class="ph" ${bg(g, 500)}></div>`)}</div></section>` : ''}
         ${dj.experiences.length ? html`<section class="stack" style="--gap:10px"><p class="eyebrow">Expériences</p><div class="list">${dj.experiences.map(e => html`<div class="item">${icon('star')}<span>${e}</span></div>`)}</div></section>` : ''}
         <section class="stack" style="--gap:12px"><p class="eyebrow">Avis d'organisateurs</p>
-          ${dj.reviews_list.length ? dj.reviews_list.map(r => html`<div class="card tight stack" style="--gap:6px"><div class="row spread">${stars(r.rating)}<span class="tiny muted">${fmt.date(r.created_at)}</span></div><p>${r.body || ''}</p><p class="small muted">— ${r.author}</p></div>`)
+          ${dj.reviews_list.length ? dj.reviews_list.map(r => html`<div class="card tight stack" style="--gap:6px"><div class="row spread">${stars(r.rating)}<span class="tiny muted"><span class="tag">avis fictif</span> ${fmt.date(r.created_at)}</span></div><p>${r.body || ''}</p><p class="small muted">— ${r.author}</p></div>`)
             : html`<p class="muted">Pas encore d'avis.</p>`}
         </section>
       </div>

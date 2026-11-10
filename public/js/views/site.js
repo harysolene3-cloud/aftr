@@ -2,6 +2,7 @@
 import { html, raw, api, icon, bg, fmt, state, toast, formData, select, empty, notice, $, on, act, avatar } from '../core.js';
 import { navigate, refreshMe } from '../app.js';
 import { djCard, djProfileBody, bindPresskit } from './parts.js';
+import { projectNav, PROMISE } from './project.js';
 
 const PH = id => `unsplash:photo-${id}`;
 const HERO = PH('1688591677634-58dfdc60d62d');
@@ -36,7 +37,9 @@ export async function home() {
       <p class="tiny" style="color:rgba(255,255,255,.45)">Chiffres calculés en direct sur la base de démonstration (données fictives).</p>
     </div>
   </section>
-  <div class="marquee" aria-hidden="true"><div class="marquee-track">${[...styles, ...styles].map(s => html`<span>${s}</span>`)}</div></div>
+  <section class="wrap" style="padding-top:28px"><p class="eyebrow accent" style="margin-bottom:8px">Le projet en 4 espaces</p><p style="max-width:80ch;font-size:17px;margin-bottom:6px"><b>${PROMISE}</b></p></section>
+  ${projectNav('/')}
+  <div class="marquee" aria-hidden="true" style="margin-top:20px"><div class="marquee-track">${[...styles, ...styles].map(s => html`<span>${s}</span>`)}</div></div>
 
   <section class="wrap section">
     <div class="section-h"><h2>Un seul endroit pour toute la nuit</h2><p>AFTR n'est pas qu'une plateforme de réservation. C'est l'environnement où les DJs développent leur réseau, leur visibilité et leur activité.</p></div>
@@ -221,7 +224,7 @@ export const legal = () => ({ title: 'Mentions légales', html: html`<section cl
     <p><b>AFTR est un projet fictif</b> réalisé dans le cadre d'un Master 2 en marketing digital. Il ne s'agit pas d'un service commercial : aucune société n'exploite cette plateforme.</p>
     <h2>Éditeur</h2><p>Projet étudiant, non immatriculé. Contact : via le <a href="/contact">formulaire de contact</a>.</p>
     <h2>Hébergement</h2><p>Application exécutée localement pour la démonstration.</p>
-    <h2>Contenus</h2><p>Les profils, organisations, événements, avis, documents et chiffres présentés sont fictifs. Toute ressemblance avec des personnes ou structures existantes serait fortuite. Les photographies proviennent d'Unsplash et sont utilisées selon la licence Unsplash ; elles n'illustrent pas les personnes fictives réelles.</p>
+    <h2>Contenus</h2><p>Les profils, organisations, événements, avis, documents et chiffres présentés sont fictifs, à l'exception du profil de la DJ Anjara, utilisé avec l'accord de l'artiste, qui est aussi l'autrice du projet. Toute ressemblance avec des personnes ou structures existantes serait fortuite. Les photographies proviennent d'Unsplash et sont utilisées selon la licence Unsplash ; elles n'illustrent pas les personnes fictives réelles.</p>
     <h2>Documents générés</h2><p>Les devis et factures produits par le Business Studio portent la mention « document fictif » et n'ont aucune valeur comptable ni légale. Ils n'ont pas fait l'objet d'une vérification réglementaire.</p>
   </section>` });
 export const privacy = () => ({ title: 'Confidentialité', html: html`<section class="wrap page-hero"><p class="eyebrow">Légal</p><h1>Politique de<br>confidentialité</h1></section>
